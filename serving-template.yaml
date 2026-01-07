@@ -1,0 +1,28 @@
+apiVersion: ai.sap.com/v1alpha1
+kind: ServingTemplate
+metadata:
+  name: ollama-phi3-serving
+  labels:
+    scenarios.ai.sap.com/id: "earnings-call-analysis"
+    ai.sap.com/version: "1.0"
+spec:
+  template:
+    apiVersion: serving.kserve.io/v1beta1
+    kind: InferenceService
+    metadata:
+      name: "{{.Name}}"
+      labels:
+        ai.sap.com/resourcePlan: "infer.l"
+    spec:
+      predictor:
+        minReplicas: 1
+        maxReplicas: 1
+        containers:
+        - name: kserve-container
+          image: "docker.io/lokeshr1102scb/ollama-phi3:latest"
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          env:
+          - name: OLLAMA_HOST
+            value: "0.0.0.0"
