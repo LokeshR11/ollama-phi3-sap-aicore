@@ -14,6 +14,14 @@ RUN apt-get update && \
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
+# Pre-download Phi3 model during build
+RUN /usr/local/bin/ollama serve > /tmp/ollama.log 2>&1 & \
+    OLLAMA_PID=$! && \
+    sleep 15 && \
+    /usr/local/bin/ollama pull phi3:3.8b && \
+    kill $OLLAMA_PID && \
+    wait $OLLAMA_PID || true
+
 # Expose port and set environment variables for Ollama
 ENV OLLAMA_HOST=0.0.0.0
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -22,34 +30,34 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Configure nginx for reverse proxy
 RUN echo "events { use epoll; worker_connections 128; } \
-    http { \
-        server { \
-                    listen 8080; \
-                        location ^~ /v1/api/ { \
-                            proxy_pass http://localhost:11434/api/; \
-                            proxy_set_header Host \$host; \
-                            proxy_set_header X-Real-IP \$remote_addr; \
-                            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; \
-                            proxy_set_header X-Forwarded-Proto \$scheme; \
-                        } \
-                        location ^~ /v1/chat/ { \
-                            proxy_pass http://localhost:11434/v1/chat/; \
-                            proxy_set_header Host \$host; \
-                            proxy_set_header X-Real-IP \$remote_addr; \
-                            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; \
-                            proxy_set_header X-Forwarded-Proto \$scheme; \
-                        } \
-                } \
-        }" > /etc/nginx/nginx.conf && \
-    chmod -R 777 /var/log/nginx /var/lib/nginx /run
+http { \
+    server { \
+        listen 8080; \
+        location ^~ /v1/api/ { \
+            proxy_pass http://localhost:11434/api/; \
+            proxy_set_header Host \$host; \
+            proxy_set_header X-Real-IP \$remote_addr; \
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; \
+            proxy_set_header X-Forwarded-Proto \$scheme; \
+        } \
+        location ^~ /v1/chat/ { \
+            proxy_pass http://localhost:11434/v1/chat/; \
+            proxy_set_header Host \$host; \
+            proxy_set_header X-Real-IP \$remote_addr; \
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for; \
+            proxy_set_header X-Forwarded-Proto \$scheme; \
+        } \
+    } \
+}" > /etc/nginx/nginx.conf && \
+chmod -R 777 /var/log/nginx /var/lib/nginx /run
 
 EXPOSE 8080
 
 # Create directory for user nobody SAP AI Core run-time
 RUN mkdir -p /nonexistent/.ollama && \
     chown -R nobody:nogroup /nonexistent && \
-    chmod -R 770 /nonexistent
-#   chmod -R 777 /nonexistent/.ollama
+    chmod -R 770 /nonexistent && \
+    chmod -R 777 /nonexistent/.ollama
 
-# Start nginx and Ollama service
+# Start nginx and ollama service
 CMD service nginx start && /usr/local/bin/ollama serve
